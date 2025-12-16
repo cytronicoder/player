@@ -1,0 +1,38 @@
+{
+  "name": "local-music-player",
+  "version": "1.0.0",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "build:main": "tsc -p tsconfig.main.json",
+    "dev:electron": "pnpm run build:main && pnpm exec electron .",
+    "electron:dev": "pnpm run build && pnpm run build:main && pnpm exec electron .",
+    "dev:all": "concurrently \"NODE_ENV=development pnpm run dev\" \"NODE_ENV=development pnpm run dev:electron\""
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "music-metadata": "^7.13.4",
+    "uuid": "^9.0.0",
+    "zustand": "^4.4.0",
+    "clsx": "^2.0.0",
+    "tailwind-merge": "^1.14.0",
+    "lucide-react": "^0.263.1"
+  },
+  "devDependencies": {
+    "electron": "^25.3.0",
+    "typescript": "^5.1.6",
+    "ts-node": "^10.9.1",
+    "concurrently": "^8.2.0",
+    "@vitejs/plugin-react": "^4.0.3",
+    "vite": "^4.4.5",
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@types/node": "^20.4.2",
+    "@types/uuid": "^9.0.2",
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.27",
+    "tailwindcss": "^3.3.3"
+  }
+}
