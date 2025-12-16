@@ -157,11 +157,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     // Load track into audio engine and get duration
+    console.log('[store] playTrack starting', { track: track.path });
     try {
-      const duration = await audioEngine.loadTrack(`file://${track.path}`);
+      // Pass a raw filesystem path; AudioEngine will normalize file:// if needed
+      const duration = await audioEngine.loadTrack(track.path);
+      console.log('[store] loadTrack returned duration', duration);
       set(state => ({ audioState: { ...state.audioState, duration } }));
     } catch (e) {
-      console.error('Failed to load track', e);
+      console.error('[store] Failed to load track', e);
       get().showToast('Failed to load track', 'error');
       return;
     }
@@ -169,10 +172,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Attempt to play
     try {
       await audioEngine.play();
+      console.log('[store] playback started');
       set(state => ({ audioState: { ...state.audioState, isPlaying: true } }));
       get().showToast(`Playing ${metadata?.title || track.filename}`, 'info');
     } catch (e) {
-      console.error('Playback failed', e);
+      console.error('[store] Playback failed', e);
       get().showToast('Playback failed. Please click play to allow audio', 'error');
     }
   },
@@ -266,11 +270,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 // Sync audio engine events to store
 audioEngine.onTimeUpdate((time) => {
+  // console.debug to avoid spamming info-level logs
+  console.debug('[store] audio time update:', time);
   useAppStore.setState(state => ({
     audioState: { ...state.audioState, currentTime: time }
   }));
 });
 
 audioEngine.onEnded(() => {
+  console.log('[store] track ended, advancing to next');
   useAppStore.getState().nextTrack();
 });

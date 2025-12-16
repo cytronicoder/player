@@ -4,14 +4,22 @@ export class PlaylistManager {
   private metadataCache = new Map<string, any>();
 
   async loadLibrary(path: string): Promise<Playlist[]> {
+    console.log('[PlaylistManager] loadLibrary', path);
     if (!window.electronAPI) return [];
-    return await window.electronAPI.scanLibrary(path);
+    const result = await window.electronAPI.scanLibrary(path);
+    console.debug('[PlaylistManager] loadLibrary result count:', result.length);
+    return result;
   }
 
   async getTrackMetadata(filePath: string) {
-    if (this.metadataCache.has(filePath)) return this.metadataCache.get(filePath);
+    if (this.metadataCache.has(filePath)) {
+      console.debug('[PlaylistManager] metadata cache HIT for', filePath);
+      return this.metadataCache.get(filePath);
+    }
+    console.log('[PlaylistManager] fetching metadata for', filePath);
     if (!window.electronAPI) return {};
     const meta = await window.electronAPI.readMetadata(filePath);
+    console.debug('[PlaylistManager] metadata fetched', meta && typeof meta === 'object' ? Object.keys(meta) : meta);
     this.metadataCache.set(filePath, meta);
     return meta;
   }

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, Sliders } from 'lucide-react';
 import { clsx } from 'clsx';
 import { EQPanel } from './EQPanel';
+import { Visualizer } from './Visualizer';
 
 export const PlayerBar = () => {
   const { 
@@ -33,11 +34,13 @@ export const PlayerBar = () => {
       <div className="w-1/3 flex items-center gap-4">
         {currentTrack && (
           <>
-            <div className="w-14 h-14 bg-gray-800 rounded overflow-hidden">
+            <div className="w-14 h-14 bg-gray-800 rounded overflow-hidden relative group">
               {currentTrack.artwork ? (
                 <img src={currentTrack.artwork} alt="art" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-gray-700 animate-pulse" />
+                <div className="w-full h-full bg-gray-700 flex items-center justify-center">
+                  <Visualizer width={56} height={28} color="#34d399" />
+                </div>
               )}
             </div>
             <div className="overflow-hidden">
@@ -98,6 +101,9 @@ export const PlayerBar = () => {
 
       {/* Volume & EQ */}
       <div className="w-1/3 flex items-center justify-end gap-4">
+        <div className="hidden md:block w-32 h-8">
+           <Visualizer width={128} height={32} color="#10b981" />
+        </div>
         <button 
           onClick={() => setShowEQ(!showEQ)}
           className={clsx("text-gray-400 hover:text-white transition-colors", showEQ && "text-green-500")}

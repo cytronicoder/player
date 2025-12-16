@@ -1,4 +1,4 @@
-import { AppSettings, EQPreset } from '../../shared/types';
+import { AppSettings } from '../../shared/types';
 
 const DEFAULT_SETTINGS: AppSettings = {
   volume: 1.0,

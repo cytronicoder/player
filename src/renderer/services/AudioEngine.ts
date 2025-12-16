@@ -63,10 +63,64 @@ export class AudioEngine {
   }
 
   async loadTrack(path: string) {
-    // In Electron, we might need to handle file protocol or stream
-    // For now, assuming a file:// URL or blob URL is passed
-    this.audio.src = path;
+    // Handle local file paths by converting to media:// protocol
+    // This avoids "Not allowed to load local resource" errors in Electron
+    let src = path;
+
+    // If caller passed a file:// URL, normalize it to an absolute path
+    if (src.startsWith('file://')) {
+      try {
+        const urlObj = new URL(src);
+        src = decodeURIComponent(urlObj.pathname);
+        console.debug('[AudioEngine] normalized file:// to path:', src);
+      } catch (err) {
+        console.warn('[AudioEngine] failed to parse file:// URL, using raw value', src, err);
+      }
+    }
+
+    if (!src.startsWith('http') && !src.startsWith('media://')) {
+      src = `media://${src}`;
+    }
+
+    console.log('[AudioEngine] loading track:', path, ' -> src:', src);
+    this.audio.src = src;
     this.audio.preload = 'auto';
+
+    // create a runtime error handler on the audio element
+    const onElemErr = (ev: any) => {
+      console.error('[AudioEngine] audio element error event', ev);
+    };
+    this.audio.addEventListener('error', onElemErr);
+
+    // Create source if not already created
+    if (!this.source) {
+      this.source = this.context.createMediaElementSource(this.audio);
+      this.connectGraph();
+    } else {
+      // ensure graph is connected
+      this.connectGraph();
+    }
+
+    // Wait for metadata to be loaded (duration)
+    return await new Promise<number>((resolve, reject) => {
+      const onLoaded = () => {
+        this.audio.removeEventListener('loadedmetadata', onLoaded);
+        this.audio.removeEventListener('error', onErr);
+        this.audio.removeEventListener('error', onElemErr);
+        console.log('[AudioEngine] loaded metadata, duration:', this.audio.duration);
+        resolve(this.audio.duration || 0);
+      };
+      const onErr = (_e: any) => {
+        this.audio.removeEventListener('error', onErr);
+        this.audio.removeEventListener('error', onElemErr);
+        console.error('[AudioEngine] error loading audio', _e);
+        reject(new Error('Error loading audio'));
+      };
+      this.audio.addEventListener('loadedmetadata', onLoaded);
+      this.audio.addEventListener('error', onErr);
+      // ensure the browser begins loading
+      try { this.audio.load(); } catch (e) { console.error('[AudioEngine] audio.load() threw', e); }
+    });
 
     // Create source if not already created
     if (!this.source) {
@@ -83,7 +137,7 @@ export class AudioEngine {
         this.audio.removeEventListener('loadedmetadata', onLoaded);
         resolve(this.audio.duration || 0);
       };
-      const onErr = (e: any) => {
+      const onErr = (_e: any) => {
         this.audio.removeEventListener('error', onErr);
         reject(new Error('Error loading audio'));
       };
@@ -93,32 +147,39 @@ export class AudioEngine {
       try { this.audio.load(); } catch (e) {}
     });
   }
-  play() {
+  async play() {
     if (this.context.state === 'suspended') {
-      this.context.resume();
+      await this.context.resume();
+      console.debug('[AudioEngine] resumed audio context');
     }
+    console.log('[AudioEngine] play() called');
     return this.audio.play();
   }
 
   pause() {
+    console.log('[AudioEngine] pause() called');
     this.audio.pause();
   }
 
   stop() {
+    console.log('[AudioEngine] stop() called');
     this.audio.pause();
     this.audio.currentTime = 0;
   }
 
   seek(time: number) {
+    console.debug('[AudioEngine] seek to', time);
     this.audio.currentTime = time;
   }
 
   setVolume(value: number) {
+    console.debug('[AudioEngine] setVolume', value);
     // Value 0.0 to 1.0
     this.gainNode.gain.value = value;
   }
 
   setEQ(bands: EQBand[]) {
+    console.debug('[AudioEngine] setEQ', bands);
     bands.forEach((band, index) => {
       if (this.eqNodes[index]) {
         this.eqNodes[index].gain.value = Math.max(-12, Math.min(12, band.gain));
