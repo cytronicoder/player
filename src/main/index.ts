@@ -244,6 +244,100 @@ ipcMain.handle('read-metadata', async (_, filePath: string) => {
   }
 });
 
+async function listAlbumsForPath(libraryPath: string) {
+  console.log('[main] building album list for:', libraryPath);
+  const albumMap = new Map<string, any>();
+  try {
+    const entries = await fs.readdir(libraryPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const folderPath = path.join(libraryPath, entry.name);
+      const files = await fs.readdir(folderPath);
+      for (const f of files) {
+        if (!f.match(/\.(mp3|flac|wav|ogg)$/i)) continue;
+        const filePath = path.join(folderPath, f);
+        try {
+          const metadata = await mm.parseFile(filePath);
+          const common = metadata.common || {};
+          const album = common.album || 'Unknown Album';
+          const artist = common.artist;
+          const year = common.year;
+          const key = `${album}||${artist || ''}`;
+          if (!albumMap.has(key)) {
+            albumMap.set(key, { name: album, artist, year, tracks: [], artwork: undefined });
+          }
+          const entryObj = albumMap.get(key);
+          entryObj.tracks.push({ path: filePath, title: common.title, artist, trackNumber: common.track?.no });
+          const pic = common.picture && common.picture[0];
+          if (!entryObj.artwork && pic && pic.data) {
+            entryObj.artwork = `data:${pic.format};base64,${(pic.data as Buffer).toString('base64')}`;
+          }
+        } catch (e) {
+          console.debug('[main] failed to parse', filePath, e);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[main] list-albums failed', e);
+  }
+  // Convert map to array
+  return Array.from(albumMap.values()).map(a => ({ name: a.name, artist: a.artist, year: a.year, artwork: a.artwork, tracks: a.tracks }));
+}
+
+ipcMain.handle('list-albums', async (_, libraryPath: string) => {
+  return listAlbumsForPath(libraryPath);
+});
+
+ipcMain.handle('get-album', async (_, libraryPath: string, albumName: string, artistName?: string) => {
+  console.log('[main] get-album', albumName, artistName);
+  const result = await listAlbumsForPath(libraryPath).catch(() => []);
+  const found = (result as any[]).find(a => a.name === albumName && (artistName ? a.artist === artistName : true));
+  return found || null;
+});
+
+async function listArtistsForPath(libraryPath: string) {
+  console.log('[main] building artist list for:', libraryPath);
+  const artists = new Map<string, any>();
+  try {
+    const entries = await fs.readdir(libraryPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const folderPath = path.join(libraryPath, entry.name);
+      const files = await fs.readdir(folderPath);
+      for (const f of files) {
+        if (!f.match(/\.(mp3|flac|wav|ogg)$/i)) continue;
+        const filePath = path.join(folderPath, f);
+        try {
+          const metadata = await mm.parseFile(filePath);
+          const common = metadata.common || {};
+          const artist = common.artist || 'Unknown Artist';
+          if (!artists.has(artist)) {
+            artists.set(artist, { name: artist, albums: new Set(), topTracks: [] });
+          }
+          const entryObj = artists.get(artist);
+          const album = common.album || 'Unknown Album';
+          entryObj.albums.add(album);
+          entryObj.topTracks.push({ path: filePath, title: common.title, album });
+        } catch (e) {}
+      }
+    }
+  } catch (e) {
+    console.error('[main] list-artists failed', e);
+  }
+  return Array.from(artists.values()).map(a => ({ name: a.name, albums: Array.from(a.albums), topTracks: a.topTracks }));
+}
+
+ipcMain.handle('list-artists', async (_, libraryPath: string) => {
+  return listArtistsForPath(libraryPath);
+});
+
+ipcMain.handle('get-artist', async (_, libraryPath: string, artistName: string) => {
+  console.log('[main] get-artist', artistName);
+  const artists = await listArtistsForPath(libraryPath).catch(() => []);
+  const found = (artists as any[]).find(a => a.name === artistName);
+  return found || null;
+});
+
 ipcMain.handle('save-playlist-metadata', async (_, folderPath: string, metadata: any) => {
   await fs.writeFile(path.join(folderPath, 'playlist.json'), JSON.stringify(metadata, null, 2));
 });

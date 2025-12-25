@@ -25,4 +25,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     console.log('[preload] ipc:find-default-music-folder');
     return ipcRenderer.invoke('find-default-music-folder');
   }
+  ,
+  listAlbums: (libraryPath: string) => {
+    console.log('[preload] ipc:list-albums', libraryPath);
+    return ipcRenderer.invoke('list-albums', libraryPath);
+  },
+  getAlbum: (libraryPath: string, albumName: string, artist?: string) => {
+    console.log('[preload] ipc:get-album', albumName);
+    return ipcRenderer.invoke('get-album', libraryPath, albumName, artist);
+  },
+  listArtists: (libraryPath: string) => {
+    console.log('[preload] ipc:list-artists', libraryPath);
+    return ipcRenderer.invoke('list-artists', libraryPath);
+  },
+  getArtist: (libraryPath: string, artistName: string) => {
+    console.log('[preload] ipc:get-artist', artistName);
+    return ipcRenderer.invoke('get-artist', libraryPath, artistName);
+  }
 });
