@@ -8,6 +8,11 @@ export class AudioEngine {
   private analyser: AnalyserNode;
   private audio: HTMLAudioElement;
 
+  // Preload cache for audio ArrayBuffers and generated object URLs
+  private bufferCache: Map<string, ArrayBuffer> = new Map();
+  private objectUrlCache: Map<string, string> = new Map();
+  private preloadControllers: Map<string, AbortController> = new Map();
+
   private readonly EQ_FREQUENCIES = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 
   constructor() {
@@ -83,7 +88,25 @@ export class AudioEngine {
     }
 
     console.log('[AudioEngine] loading track:', path, ' -> src:', src);
-    this.audio.src = src;
+    // If we have a preloaded buffer for this path, create an object URL for faster startup
+    if (this.bufferCache.has(path)) {
+      try {
+        let objectUrl = this.objectUrlCache.get(path);
+        if (!objectUrl) {
+          const buffer = this.bufferCache.get(path)!;
+          const mime = guessMime(path);
+          objectUrl = URL.createObjectURL(new Blob([buffer], { type: mime }));
+          this.objectUrlCache.set(path, objectUrl);
+        }
+        console.debug('[AudioEngine] using preloaded object URL for', path);
+        this.audio.src = objectUrl;
+      } catch (e) {
+        console.warn('[AudioEngine] failed to use preloaded buffer, falling back to media://', e);
+        this.audio.src = src;
+      }
+    } else {
+      this.audio.src = src;
+    }
     this.audio.preload = 'auto';
 
     // create a runtime error handler on the audio element
@@ -198,6 +221,99 @@ export class AudioEngine {
 
   onTimeUpdate(callback: (time: number) => void) {
     this.audio.ontimeupdate = () => callback(this.audio.currentTime);
+  }
+
+  // Preload array buffer for the given path and cache it for later use
+  async preload(path: string) {
+    if (this.bufferCache.has(path)) return;
+    if (this.preloadControllers.has(path)) return; // already preloading
+    const controller = new AbortController();
+    this.preloadControllers.set(path, controller);
+    try {
+      let src = path;
+      if (src.startsWith('file://')) {
+        try { src = decodeURIComponent(new URL(src).pathname); } catch (e) {}
+      }
+      if (!src.startsWith('http') && !src.startsWith('media://')) src = `media://${src}`;
+      console.debug('[AudioEngine] preloading', src);
+      const resp = await fetch(src, { signal: controller.signal });
+      if (!resp.ok) throw new Error('Fetch failed');
+      const buf = await resp.arrayBuffer();
+      this.bufferCache.set(path, buf);
+    } catch (e: any) {
+      if (e && e.name === 'AbortError') {
+        console.debug('[AudioEngine] preload aborted for', path);
+      } else {
+        console.error('[AudioEngine] preload failed for', path, e);
+      }
+    } finally {
+      this.preloadControllers.delete(path);
+    }
+  }
+
+  cancelPreload(path: string) {
+    // Abort an in-flight preload if present
+    const c = this.preloadControllers.get(path);
+    if (c) {
+      try { c.abort(); } catch (e) {}
+      this.preloadControllers.delete(path);
+    }
+    // Remove cached buffers and object URLs
+    this.bufferCache.delete(path);
+    const objectUrl = this.objectUrlCache.get(path);
+    if (objectUrl) {
+      try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+      this.objectUrlCache.delete(path);
+    }
+  }
+
+  clearPreloads() {
+    // Abort any in-flight preloads
+    for (const c of this.preloadControllers.values()) {
+      try { c.abort(); } catch (e) {}
+    }
+    this.preloadControllers.clear();
+    // Clear buffers and object URLs
+    for (const [k, _] of this.bufferCache.entries()) {
+      try { this.bufferCache.delete(k); } catch (e) {}
+    }
+    for (const [k, url] of this.objectUrlCache.entries()) {
+      try { URL.revokeObjectURL(url); } catch (e) {}
+      this.objectUrlCache.delete(k);
+    }
+  }
+
+  clearPreloadsExcept(keep: string[] = []) {
+    const keepSet = new Set(keep);
+    // Abort controllers and remove buffers for paths not in keep
+    for (const [k, c] of this.preloadControllers.entries()) {
+      if (!keepSet.has(k)) {
+        try { c.abort(); } catch (e) {}
+        this.preloadControllers.delete(k);
+      }
+    }
+
+    for (const k of Array.from(this.bufferCache.keys())) {
+      if (!keepSet.has(k)) this.bufferCache.delete(k);
+    }
+
+    for (const [k, url] of Array.from(this.objectUrlCache.entries())) {
+      if (!keepSet.has(k)) {
+        try { URL.revokeObjectURL(url); } catch (e) {}
+        this.objectUrlCache.delete(k);
+      }
+    }
+  }
+}
+
+function guessMime(path: string) {
+  const ext = path.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'mp3': return 'audio/mpeg';
+    case 'wav': return 'audio/wav';
+    case 'flac': return 'audio/flac';
+    case 'ogg': return 'audio/ogg';
+    default: return 'audio/mpeg';
   }
 }
 

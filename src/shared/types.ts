@@ -24,6 +24,20 @@ export interface Track {
   artwork?: string; // data URL or file path
 }
 
+export interface Album {
+  name: string;
+  artist?: string;
+  year?: number;
+  artwork?: string; // data URL or path
+  tracks: Track[];
+}
+
+export interface Artist {
+  name: string;
+  albums?: Album[];
+  topTracks?: Track[];
+}
+
 export interface AudioState {
   isPlaying: boolean;
   currentTime: number;
@@ -54,6 +68,9 @@ export interface AppSettings {
   shuffle: boolean;
   eqEnabled: boolean;
   selectedEqPresetId?: string;
+  autoplay?: boolean;
+  theme?: 'dark' | 'light';
+  showToasts?: boolean;
   musicLibraryPath: string;
   customEqPresets: EQPreset[];
 }

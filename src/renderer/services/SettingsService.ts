@@ -6,6 +6,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   loopMode: 'off',
   shuffle: false,
   eqEnabled: false,
+  autoplay: false,
+  theme: 'dark',
+  showToasts: false,
   musicLibraryPath: '',
   customEqPresets: []
 };
@@ -37,6 +40,15 @@ export class SettingsService {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.settings));
     } catch (e) {
       console.error('Failed to save settings', e);
+    }
+  }
+
+  reset() {
+    this.settings = { ...DEFAULT_SETTINGS };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.settings));
+    } catch (e) {
+      console.error('Failed to reset settings', e);
     }
   }
 
